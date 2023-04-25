@@ -1,0 +1,19 @@
+************** Usar en una maquina ubuntu *************
+|	INSTALACION									|
+|											|
+|	-Instalar MPICH en el sistema Linux					|
+|	sudo apt-get install mpich						|
+|	-Instalar el paquete de desarrollo de MPI en el sistema	|
+|	sudo apt-get install libopenmpi-dev					|
+-	-	-	-	-	-	-	-	-	-	-	-
+|	EJECUCION		|
+|	No se recomienda ejecutar programas MPI como root,ya que 	|
+|	puede causar problemas de seguridad y otros problemas.	|
+	Ejecutar con las siguientes lineas de comando teniendo
+	
+	nano /home/palindromo.c
+	mpicc -o resultado palindromo.c
+	sudo -u felipe mpirun -np 2 resultado
+
+
+
