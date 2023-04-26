@@ -1,58 +1,63 @@
-#include <stdio.h> 
- #include <stdlib.h> 
- #include <mpi.h> 
- #include <omp.h> 
-  
- #define N 100 // tamaño de la matriz 
-  
- int main(int argc, char **argv) 
- { 
-     int size, rank; 
-     int i, j, k; 
-     int a[N][N], b[N][N], c[N][N]; 
-  
-     MPI_Init(&argc, &argv); // inicialización de MPI 
-     MPI_Comm_size(MPI_COMM_WORLD, &size); // obtiene el tamaño del comunicador global 
-     MPI_Comm_rank(MPI_COMM_WORLD, &rank); // obtiene el rango del proceso actual en el comunicador global 
-  
-     if (rank == 0) { // solo el proceso 0 inicializa la matriz 'a' y la matriz 'b' 
-         for (i = 0; i < N; i++) { 
-             for (j = 0; j < N; j++) { 
-                 a[i][j] = i + j; 
-                 b[i][j] = i - j; 
-             } 
-         } 
-     } 
-  
-     // se reparte la matriz 'b' entre todos los procesos mediante la función MPI_Bcast 
-     MPI_Bcast(b, N*N, MPI_INT, 0, MPI_COMM_WORLD); 
-  
-     // se divide el trabajo en múltiples hilos usando OpenMP 
-     #pragma omp parallel shared(a, b, c) private(i, j, k) 
-     { 
-         #pragma omp for // divide el ciclo for en múltiples hilos 
-         for (i = 0; i < N; i++) { 
-             for (j = 0; j < N; j++) { 
-                 c[i][j] = 0; // inicializa la matriz 'c' en 0 
-                 for (k = 0; k < N; k++) { 
-                     c[i][j] += a[i][k] * b[k][j]; // realiza la multiplicación de matrices 
-                 } 
-             } 
-         } 
-     } 
-  
-     // se suman los resultados parciales de cada proceso usando MPI_Reduce 
-     MPI_Reduce(rank == 0 ? MPI_IN_PLACE : c, c, N*N, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD); 
-  
-     if (rank == 0) { // solo el proceso 0 imprime la matriz resultante 'c' 
-         for (i = 0; i < N; i++) { 
-             for (j = 0; j < N; j++) { 
-                 printf("%d ", c[i][j]); 
-             } 
-             printf("\n"); 
-         } 
-     } 
-  
-     MPI_Finalize(); // finalización de MPI 
-     return 0; 
- }
+#include <mpi.h>
+#include <omp.h>
+#include <stdio.h>
+
+#define N 100
+
+int main(int argc, char *argv[]) {
+  int rank, size;
+  int A[N][N], B[N][N], C[N][N];
+
+  MPI_Init(&argc, &argv);
+  MPI_Comm_size(MPI_COMM_WORLD, &size);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  // Inicializar matrices A y B
+  for (int i = 0; i < N; i++) {
+    for (int j = 0; j < N; j++) {
+      A[i][j] = i + j;
+      B[i][j] = i - j;
+    }
+  }
+
+  // Dividir la matriz en bloques para que cada proceso MPI maneje una sección de la matriz
+  int rows_per_process = N / size;
+  int start_row = rank * rows_per_process;
+  int end_row = start_row + rows_per_process;
+
+  // Realizar la multiplicación de la matriz en paralelo
+  #pragma omp parallel for collapse(2)
+   for (int i = start_row; i < end_row; i++) {
+    for (int j = 0; j < N; j++) {
+      int sum = 0;
+      for (int k = 0; k < N; k++) {
+        sum += A[i][k] * B[k][j];
+      }
+      C[i][j] = sum;
+    }
+  }
+
+  // Combinar los resultados parciales de cada proceso MPI
+  if (rank == 0) {
+    for (int i = 1; i < size; i++) {
+      MPI_Recv(&C[i * rows_per_process][0], rows_per_process * N, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+  } else {
+    MPI_Send(&C[start_row][0], rows_per_process * N, MPI_INT, 0, 0, MPI_COMM_WORLD);
+  }
+
+  // Imprimir la matriz resultado
+  if (rank == 0) {
+    printf("Matriz resultado:\n");
+    for (int i = 0; i < N; i++) {
+      for (int j = 0; j < N; j++) {
+        printf("%d ", C[i][j]);
+      }
+      printf("\n");
+        }
+  }
+
+  MPI_Finalize();
+
+  return 0;
+}
